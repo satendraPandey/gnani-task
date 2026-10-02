@@ -3,6 +3,7 @@ import "./globals.css";
 import { Footer } from "@/components/footer";
 import { Figtree } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { AuthProvider } from "@/components/session-provider";
 
 const figtree = Figtree({subsets:['latin'],variable:'--font-sans'});
 
@@ -14,10 +15,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={cn("h-full", "antialiased", "font-sans", "dark", figtree.variable)}
     >
       <body className="min-h-full flex flex-col">
-        <Navbar/>
-        {children}
-        <Footer/>
-        </body>
+        <AuthProvider>
+          <Navbar/>
+          {children}
+          <Footer/>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

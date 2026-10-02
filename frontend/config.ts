@@ -1,4 +1,4 @@
-export const SITE_NAME = "AudioNote";
+export const SITE_NAME = "VoiceNote";
 
 export const navItems = [
   {
