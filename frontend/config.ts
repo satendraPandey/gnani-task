@@ -40,3 +40,5 @@ export const copyright = {
   license: "Built with Next.js",
 };
 
+export const ALLOWED_EXTENSIONS = ["mp3", "wav", "ogg", "flac", "aac", "m4a"];
+export const ACCEPTED_FORMATS = ".mp3,.wav,.ogg,.flac,.aac,.m4a,audio/mpeg,audio/wav,audio/ogg,audio/flac,audio/aac,audio/x-m4a,audio/mp4";

@@ -4,6 +4,7 @@ import { Footer } from "@/components/footer";
 import { Figtree } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { AuthProvider } from "@/components/session-provider";
+import { Toaster } from "@/components/ui/toast"
 
 const figtree = Figtree({subsets:['latin'],variable:'--font-sans'});
 
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <Navbar/>
           {children}
           <Footer/>
+          <Toaster/>
         </AuthProvider>
       </body>
     </html>

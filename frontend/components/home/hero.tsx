@@ -1,4 +1,6 @@
-import Link from "next/link";
+"use client";
+
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -8,8 +10,65 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Mic, Upload } from "lucide-react";
+import { uploadAudio } from "@/app/actions/upload";
+import { toast } from "../ui/toast";
+import { ACCEPTED_FORMATS, ALLOWED_EXTENSIONS } from "@/config";
+
+
 
 const Hero = () => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    const extension = selectedFile.name.split(".").pop()?.toLowerCase();
+    if (!extension || !ALLOWED_EXTENSIONS.includes(extension)) {
+      toast.add({
+        title: "Unsupported file format",
+        description: "Please select an MP3, WAV, OGG, FLAC, AAC, or M4A file.",
+        type: "error",
+      });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
+    }
+
+    setFile(selectedFile);
+  };
+
+  const handleUpload = async () => {
+    if (!file) {
+      toast.add({ title: "Please choose an audio file first.", type: "warning" });
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await uploadAudio(formData);
+      if (res.success) {
+        toast.add({ title: res.message, type: "success" });
+      } else {
+        toast.add({ title: res.error, type: "error" });
+      }
+    } catch (error) {
+      toast.add({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Failed to connect to server.",
+        type: "error",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <section className="min-h-[calc(100vh-80px)] px-6 py-20">
       <div className="mx-auto flex max-w-6xl flex-col items-center">
@@ -66,21 +125,34 @@ const Hero = () => {
 
               {/* Heading */}
               <h2 className="mt-6 text-xl font-medium">
-                Drop your audio here
+                {file ? file.name : "Drop your audio here"}
               </h2>
 
               {/* Description */}
               <p className="mt-2 text-sm text-muted-foreground">
-                Drag and drop your file or choose one from your computer
+                {file
+                  ? `${(file.size / (1024 * 1024)).toFixed(2)} MB · Ready to upload`
+                  : "Drag and drop your file or choose one from your computer"}
               </p>
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_FORMATS}
+                className="hidden"
+                onChange={handleFileChange}
+              />
 
               {/* Choose Audio */}
               <Button
+                type="button"
                 size="lg"
                 className="mt-7 rounded-full px-7"
+                onClick={() => fileInputRef.current?.click()}
               >
                 <Upload className="mr-2 h-4 w-4" />
-                Choose Audio
+                {file ? "Change Audio" : "Choose Audio"}
               </Button>
 
               {/* Supported formats */}
@@ -96,7 +168,7 @@ const Hero = () => {
               Language
             </label>
 
-            <Select>
+            <Select defaultValue={"en-IN"}>
               <SelectTrigger
                 className="
                   h-11 w-full
@@ -161,10 +233,10 @@ const Hero = () => {
             <Button
               size="lg"
               className="rounded-full px-8"
-              nativeButton={false}
-              render={<Link href="/login" />}
+              onClick={handleUpload}
+              disabled={isUploading}
             >
-              Get Started
+              {isUploading ? "Uploading..." : "Upload Audio"}
             </Button>
           </div>
 
