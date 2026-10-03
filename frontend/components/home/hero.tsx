@@ -126,6 +126,10 @@ const Hero = () => {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("language", language);
+      const userId = (session?.user as { id?: string })?.id;
+      if (userId) {
+        formData.append("user_id", userId);
+      }
 
       const transcribingTimer = setTimeout(() => {
         setStatus("transcribing");

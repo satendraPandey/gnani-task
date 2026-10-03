@@ -16,21 +16,44 @@ export const authOptions: AuthOptions = {
   },
   callbacks: {
     async redirect({ url, baseUrl }) {
-      // Allows relative callback URLs
       if (url.startsWith("/")) return `${baseUrl}${url}`;
-      // Allows callback URLs on the same origin
       if (new URL(url).origin === baseUrl) return url;
       return baseUrl;
     },
+    async signIn({ user }) {
+      if (!user?.email) return true;
+      try {
+        const backendUrl =
+          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+        const res = await fetch(`${backendUrl}/auth/sync-user`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: user.email,
+            name: user.name,
+            image: user.image,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.id) {
+            user.id = data.id;
+          }
+        }
+      } catch (err) {
+        console.error("[Auth] Failed to sync user to database:", err);
+      }
+      return true;
+    },
     async jwt({ token, user }) {
-      if (user) {
+      if (user?.id) {
         token.id = user.id;
       }
       return token;
     },
     async session({ session, token }) {
-      if (session?.user && token?.sub) {
-        (session.user as { id?: string }).id = token.sub;
+      if (session?.user) {
+        (session.user as { id?: string }).id = (token.id as string) || (token.sub as string);
       }
       return session;
     },

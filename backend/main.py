@@ -1,15 +1,27 @@
 from io import BytesIO
 import uuid
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from contextlib import asynccontextmanager
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from config import SITE_NAME, R2_BUCKET_NAME, GNANI_API_KEY
 from storage import upload_file_to_r2
 from gnani_service import smart_transcribe, get_batch_job_status
+from database import init_db, get_db
+from models import User, Transcription, Segment
 
 ALLOWED_EXTENSIONS = {"mp3", "wav", "ogg", "flac", "aac", "m4a"}
 
-app = FastAPI(title=f"{SITE_NAME} API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title=f"{SITE_NAME} API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,15 +31,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+class UserSyncRequest(BaseModel):
+    email: str
+    name: str | None = None
+    image: str | None = None
+
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "app": SITE_NAME, "message": "Server is running"}
+
+
+@app.post("/auth/sync-user")
+def sync_user(payload: UserSyncRequest, db: Session = Depends(get_db)):
+    if not db:
+        return {"success": False, "message": "Database not configured"}
+
+    user = db.query(User).filter(User.email == payload.email).first()
+    if user:
+        if payload.name is not None:
+            user.name = payload.name
+        if payload.image is not None:
+            user.image = payload.image
+        db.commit()
+        db.refresh(user)
+    else:
+        user = User(
+            email=payload.email,
+            name=payload.name,
+            image=payload.image,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    return {
+        "success": True,
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "image": user.image,
+    }
 
 
 @app.post("/upload")
 async def upload_audio(
     file: UploadFile = File(...),
     language: str = Form("en-IN"),
+    user_id: str | None = Form(None),
+    db: Session = Depends(get_db),
 ):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
@@ -70,9 +123,48 @@ async def upload_audio(
     else:
         transcription_error = "GNANI_API_KEY is not configured in backend/.env"
 
+    transcription_id = None
+    if db:
+        try:
+            rec_status = "completed" if (transcription_result and transcription_result.get("transcript")) else ("failed" if transcription_error else "pending")
+            record = Transcription(
+                user_id=user_id,
+                filename=file.filename,
+                file_key=key,
+                file_size=file_size,
+                file_type=file.content_type or "audio/mpeg",
+                language=language,
+                status=rec_status,
+                method=transcription_result.get("method") if transcription_result else None,
+                job_id=transcription_result.get("job_id") if transcription_result else None,
+                full_transcript=transcription_result.get("transcript") if transcription_result else None,
+                duration_seconds=transcription_result.get("duration_seconds") if transcription_result else None,
+                error_message=transcription_error,
+            )
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            transcription_id = record.id
+
+            if transcription_result and transcription_result.get("segments"):
+                for seg in transcription_result["segments"]:
+                    seg_record = Segment(
+                        transcription_id=record.id,
+                        segment_id=seg.get("segment_id"),
+                        speaker_id=seg.get("speaker_id"),
+                        start_time=seg.get("start_time"),
+                        end_time=seg.get("end_time"),
+                        text=seg.get("text", ""),
+                    )
+                    db.add(seg_record)
+                db.commit()
+        except Exception:
+            db.rollback()
+
     return {
         "success": True,
         "message": "File uploaded and processed successfully",
+        "transcription_id": transcription_id,
         "file": {
             "name": file.filename,
             "size": file_size,
@@ -135,6 +227,33 @@ async def transcribe_audio(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/transcriptions")
+def get_user_transcriptions(user_id: str, db: Session = Depends(get_db)):
+    if not db:
+        return {"success": True, "transcriptions": []}
+    records = (
+        db.query(Transcription)
+        .filter(Transcription.user_id == user_id)
+        .order_by(Transcription.created_at.desc())
+        .all()
+    )
+    return {
+        "success": True,
+        "transcriptions": [
+            {
+                "id": r.id,
+                "filename": r.filename,
+                "status": r.status,
+                "language": r.language,
+                "full_transcript": r.full_transcript,
+                "duration_seconds": r.duration_seconds,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in records
+        ],
+    }
 
 
 @app.get("/jobs/{job_id}")
