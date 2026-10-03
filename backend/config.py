@@ -19,3 +19,5 @@ GNANI_BASE_URL = os.getenv("GNANI_BASE_URL", "https://api.vachana.ai")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
+ALLOWED_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000", "https://gnani-task-z18v.onrender.com", "https://gnani-satendra.vercel.app"]

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from config import SITE_NAME, R2_BUCKET_NAME, GNANI_API_KEY
+from config import SITE_NAME, R2_BUCKET_NAME, GNANI_API_KEY, ALLOWED_ORIGINS
 from storage import upload_file_to_r2
 from gnani_service import smart_transcribe, get_batch_job_status
 from database import init_db, get_db
@@ -33,7 +33,7 @@ app = FastAPI(title=f"{SITE_NAME} API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -24,7 +24,7 @@ export const authOptions: AuthOptions = {
       if (!user?.email) return true;
       try {
         const backendUrl =
-          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+          process.env.NEXT_PUBLIC_BACKEND_URL!;
         const res = await fetch(`${backendUrl}/auth/sync-user`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
