@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -29,6 +29,8 @@ import { useAudio } from "@/context/audio-context";
 
 const Hero = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
+  const [isDragging, setIsDragging] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<"transcript" | "speakers">("transcript");
   const {
@@ -56,6 +58,65 @@ const Hero = () => {
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
+
+  useEffect(() => {
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer?.types?.includes("Files")) {
+        dragCounter.current += 1;
+        if (dragCounter.current === 1) {
+          setIsDragging(true);
+        }
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current -= 1;
+      if (dragCounter.current <= 0) {
+        dragCounter.current = 0;
+        setIsDragging(false);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current = 0;
+      setIsDragging(false);
+
+      const droppedFile = e.dataTransfer?.files?.[0];
+      if (!droppedFile) return;
+
+      const extension = droppedFile.name.split(".").pop()?.toLowerCase();
+      if (!extension || !ALLOWED_EXTENSIONS.includes(extension)) {
+        toast.add({
+          title: "Unsupported file format",
+          description: "Please select an MP3, WAV, OGG, FLAC, AAC, or M4A file.",
+          type: "error",
+        });
+        return;
+      }
+
+      console.log("[Hero] File dropped via full-page dropzone:", droppedFile.name);
+      setFile(droppedFile);
+    };
+
+    window.addEventListener("dragenter", handleDragEnter);
+    window.addEventListener("dragleave", handleDragLeave);
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("drop", handleDrop);
+
+    return () => {
+      window.removeEventListener("dragenter", handleDragEnter);
+      window.removeEventListener("dragleave", handleDragLeave);
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("drop", handleDrop);
+    };
+  }, [setFile]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -192,7 +253,21 @@ const Hero = () => {
   };
 
   return (
-    <section className="min-h-[calc(100vh-80px)] px-6 py-20">
+    <section className="min-h-[calc(100vh-80px)] px-6 py-20 relative">
+      {isDragging && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/85 backdrop-blur-md border-4 border-dashed border-white/40 pointer-events-none animate-in fade-in-0 duration-200">
+          <div className="flex h-24 w-24 items-center justify-center rounded-3xl border border-white/20 bg-white/10 shadow-2xl animate-bounce">
+            <Upload className="h-12 w-12 text-white" />
+          </div>
+          <h2 className="mt-6 text-3xl font-semibold text-white tracking-tight">
+            Drop your audio file here
+          </h2>
+          <p className="mt-2 text-sm text-neutral-300">
+            Supports MP3, WAV, OGG, FLAC, AAC, M4A
+          </p>
+        </div>
+      )}
+
       <div className="mx-auto flex max-w-6xl flex-col items-center">
         <div className="max-w-3xl text-center">
           <p className="mb-5 text-sm font-medium text-muted-foreground">
@@ -278,13 +353,20 @@ const Hero = () => {
               Language
             </label>
 
-            <Select value={language} onValueChange={handleLanguageChange}>
+            <Select
+              value={language}
+              onValueChange={handleLanguageChange}
+              disabled={isUploading}
+            >
               <SelectTrigger
+                disabled={isUploading}
                 className="
                   h-11 w-full
                   rounded-xl
                   border-white/10
                   bg-white/[0.03]
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
                 "
               >
                 <SelectValue placeholder="Select language" />
