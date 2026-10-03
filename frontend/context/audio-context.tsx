@@ -9,6 +9,14 @@ export type AudioStatus =
   | "completed"
   | "error";
 
+export interface AudioSegment {
+  segment_id?: number;
+  start_time?: number;
+  end_time?: number;
+  speaker_id?: number | string | null;
+  text: string;
+}
+
 export interface AudioContextType {
   file: File | null;
   audioUrl: string | null;
@@ -16,12 +24,14 @@ export interface AudioContextType {
   isUploading: boolean;
   status: AudioStatus;
   transcript: string | null;
+  segments: AudioSegment[];
   error: string | null;
   setFile: (file: File | null) => void;
   setLanguage: (lang: string) => void;
   setIsUploading: (loading: boolean) => void;
   setStatus: (status: AudioStatus) => void;
   setTranscript: (text: string | null) => void;
+  setSegments: (segments: AudioSegment[]) => void;
   setError: (err: string | null) => void;
   resetAudio: () => void;
 }
@@ -35,6 +45,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [status, setStatus] = useState<AudioStatus>("idle");
   const [transcript, setTranscript] = useState<string | null>(null);
+  const [segments, setSegments] = useState<AudioSegment[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,6 +59,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setAudioUrl(url);
     setStatus("idle");
     setTranscript(null);
+    setSegments([]);
     setError(null);
 
     return () => {
@@ -62,6 +74,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setIsUploading(false);
     setStatus("idle");
     setTranscript(null);
+    setSegments([]);
     setError(null);
   };
 
@@ -74,12 +87,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         isUploading,
         status,
         transcript,
+        segments,
         error,
         setFile,
         setLanguage,
         setIsUploading,
         setStatus,
         setTranscript,
+        setSegments,
         setError,
         resetAudio,
       }}

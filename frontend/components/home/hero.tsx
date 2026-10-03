@@ -9,7 +9,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Mic, Upload, Loader2, CheckCircle2, AlertCircle, Copy, Check } from "lucide-react";
+import {
+  Mic,
+  Upload,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  Check,
+  FileText,
+  Users,
+} from "lucide-react";
 import { uploadAudio } from "@/app/actions/upload";
 import { toast } from "../ui/toast";
 import { ACCEPTED_FORMATS, ALLOWED_EXTENSIONS } from "@/config";
@@ -20,6 +30,7 @@ import { useAudio } from "@/context/audio-context";
 const Hero = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<"transcript" | "speakers">("transcript");
   const {
     file,
     setFile,
@@ -31,11 +42,20 @@ const Hero = () => {
     setStatus,
     transcript,
     setTranscript,
+    segments,
+    setSegments,
     error,
     setError,
   } = useAudio();
   const { data: session } = useSession();
   const router = useRouter();
+
+  const formatTime = (seconds?: number) => {
+    if (seconds === undefined || seconds === null) return "00:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -100,6 +120,7 @@ const Hero = () => {
       setStatus("uploading");
       setError(null);
       setTranscript(null);
+      setSegments([]);
       console.log("[Hero] Current state: uploading", { name: file.name, size: file.size, language });
 
       const formData = new FormData();
@@ -120,7 +141,12 @@ const Hero = () => {
         if (res.transcript) {
           setStatus("completed");
           setTranscript(res.transcript);
-          console.log("[Hero] Current state: completed", { transcript: res.transcript, method: res.method });
+          setSegments(res.segments || []);
+          console.log("[Hero] Current state: completed", {
+            transcript: res.transcript,
+            segmentsCount: res.segments?.length || 0,
+            method: res.method,
+          });
           toast.add({
             title: "Transcription complete",
             description: res.transcript.slice(0, 100) + (res.transcript.length > 100 ? "..." : ""),
@@ -332,20 +358,55 @@ const Hero = () => {
           </div>
 
           {transcript && (
-            <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-left">
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  <h3 className="text-sm font-medium text-white/90">Transcription Result</h3>
+            <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-left shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                <div className="inline-flex rounded-xl bg-white/[0.04] p-1 border border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("transcript");
+                      console.log("[Hero] Active tab: Full Transcript");
+                    }}
+                    className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-medium transition-all ${
+                      activeTab === "transcript"
+                        ? "bg-white/15 text-white shadow-sm"
+                        : "text-muted-foreground hover:text-white"
+                    }`}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Full Transcript
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("speakers");
+                      console.log("[Hero] Active tab: Multi-Speaker");
+                    }}
+                    className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-medium transition-all ${
+                      activeTab === "speakers"
+                        ? "bg-white/15 text-white shadow-sm"
+                        : "text-muted-foreground hover:text-white"
+                    }`}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    Multi-Speaker
+                    {segments.length > 0 && (
+                      <span className="ml-1 rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[10px] text-indigo-300">
+                        {segments.length}
+                      </span>
+                    )}
+                  </button>
                 </div>
+
                 <div className="flex items-center gap-3">
-                  <span className="rounded-md bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">
+                  <span className="rounded-md bg-white/5 px-2.5 py-1 text-xs text-muted-foreground">
                     {language}
                   </span>
                   <button
                     type="button"
                     onClick={handleCopyTranscript}
-                    className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-white"
+                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-white/20 hover:text-white"
                   >
                     {copied ? (
                       <>
@@ -361,9 +422,65 @@ const Hero = () => {
                   </button>
                 </div>
               </div>
-              <p className="mt-4 text-lg leading-10 text-white/90 whitespace-pre-wrap selection:bg-emerald-500/20">
-                {transcript}
-              </p>
+
+              {activeTab === "transcript" && (
+                <p className="mt-5 text-base leading-relaxed text-white/90 whitespace-pre-wrap selection:bg-emerald-500/20">
+                  {transcript}
+                </p>
+              )}
+
+              {activeTab === "speakers" && (
+                <div className="mt-5 space-y-3.5 max-h-[500px] overflow-y-auto pr-1">
+                  {segments && segments.length > 0 ? (
+                    segments.map((seg, idx) => {
+                      const speakerNum = seg.speaker_id ?? (idx % 2 === 0 ? 1 : 2);
+                      const isSpeaker1 = speakerNum === 1 || speakerNum === "1";
+                      return (
+                        <div
+                          key={seg.segment_id ?? idx}
+                          className="rounded-xl border border-white/5 bg-white/[0.015] p-4 transition-colors hover:border-white/10"
+                        >
+                          <div className="flex items-center justify-between text-xs mb-2">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium ${
+                                isSpeaker1
+                                  ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/20"
+                                  : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20"
+                              }`}
+                            >
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${
+                                  isSpeaker1 ? "bg-indigo-400" : "bg-emerald-400"
+                                }`}
+                              />
+                              Speaker {speakerNum}
+                            </span>
+                            <span className="text-muted-foreground font-mono text-[11px]">
+                              {formatTime(seg.start_time)} - {formatTime(seg.end_time)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-white/85 leading-relaxed">
+                            {seg.text}
+                          </p>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-xl border border-white/5 bg-white/[0.015] p-4">
+                      <div className="flex items-center justify-between text-xs mb-2">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-indigo-500/15 text-indigo-300 border border-indigo-500/20">
+                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                          Speaker 1
+                        </span>
+                        <span className="text-muted-foreground font-mono text-[11px]">00:00</span>
+                      </div>
+                      <p className="text-sm text-white/85 leading-relaxed">
+                        {transcript}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

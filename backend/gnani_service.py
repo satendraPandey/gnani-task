@@ -73,6 +73,8 @@ async def create_batch_job(audio_url: str, language_code: str) -> str:
             "model": "gnani-prisma-v2.5",
             "language_code": language_code,
             "mode": "transcribe",
+            "with_diarization": True,
+            "num_speakers": 2,
         },
         "source": {
             "type": "cloud_storage",
