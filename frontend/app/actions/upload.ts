@@ -34,3 +34,37 @@ export async function uploadAudio(formData: FormData) {
     };
   }
 }
+
+export async function summarizeTranscriptAction(payload: {
+  transcript?: string;
+  transcription_id?: string;
+  format_style?: string;
+  language?: string;
+}) {
+  try {
+    const res = await fetch(`${BACKEND_URL}/summarize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => null);
+      return {
+        success: false,
+        error: errorData?.detail || `Summarization failed with status ${res.status}`,
+      };
+    }
+
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    return {
+      success: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to connect to backend server",
+    };
+  }
+}

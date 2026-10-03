@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from config import DATABASE_URL
 
@@ -40,3 +40,9 @@ def init_db():
     if engine:
         import models
         Base.metadata.create_all(bind=engine)
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE transcriptions ADD COLUMN IF NOT EXISTS summary TEXT;"))
+                conn.commit()
+        except Exception:
+            pass

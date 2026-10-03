@@ -55,6 +55,7 @@ class Transcription(Base):
     method = Column(String, nullable=True)
     job_id = Column(String, nullable=True, index=True)
     full_transcript = Column(Text, nullable=True)
+    summary = Column(Text, nullable=True)
     duration_seconds = Column(Float, nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

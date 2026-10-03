@@ -62,9 +62,9 @@ function DropdownMenuSeparator({
 function DropdownMenuLabel({
   className,
   ...props
-}: MenuPrimitive.GroupLabel.Props) {
+}: React.ComponentProps<"div">) {
   return (
-    <MenuPrimitive.GroupLabel
+    <div
       data-slot="dropdown-menu-label"
       className={cn("px-2.5 py-1 text-xs font-medium text-muted-foreground", className)}
       {...props}

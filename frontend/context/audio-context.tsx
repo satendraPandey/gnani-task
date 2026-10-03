@@ -6,6 +6,7 @@ export type AudioStatus =
   | "idle"
   | "uploading"
   | "transcribing"
+  | "summarizing"
   | "completed"
   | "error";
 
@@ -24,6 +25,7 @@ export interface AudioContextType {
   isUploading: boolean;
   status: AudioStatus;
   transcript: string | null;
+  summary: string | null;
   segments: AudioSegment[];
   error: string | null;
   setFile: (file: File | null) => void;
@@ -31,6 +33,7 @@ export interface AudioContextType {
   setIsUploading: (loading: boolean) => void;
   setStatus: (status: AudioStatus) => void;
   setTranscript: (text: string | null) => void;
+  setSummary: (summary: string | null) => void;
   setSegments: (segments: AudioSegment[]) => void;
   setError: (err: string | null) => void;
   resetAudio: () => void;
@@ -45,6 +48,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [status, setStatus] = useState<AudioStatus>("idle");
   const [transcript, setTranscript] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
   const [segments, setSegments] = useState<AudioSegment[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +63,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setAudioUrl(url);
     setStatus("idle");
     setTranscript(null);
+    setSummary(null);
     setSegments([]);
     setError(null);
 
@@ -74,6 +79,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setIsUploading(false);
     setStatus("idle");
     setTranscript(null);
+    setSummary(null);
     setSegments([]);
     setError(null);
   };
@@ -87,6 +93,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         isUploading,
         status,
         transcript,
+        summary,
         segments,
         error,
         setFile,
@@ -94,6 +101,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         setIsUploading,
         setStatus,
         setTranscript,
+        setSummary,
         setSegments,
         setError,
         resetAudio,

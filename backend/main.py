@@ -11,6 +11,7 @@ from storage import upload_file_to_r2
 from gnani_service import smart_transcribe, get_batch_job_status
 from database import init_db, get_db
 from models import User, Transcription, Segment
+from summarizer import summarize_transcript
 
 ALLOWED_EXTENSIONS = {"mp3", "wav", "ogg", "flac", "aac", "m4a"}
 
@@ -36,6 +37,13 @@ class UserSyncRequest(BaseModel):
     email: str
     name: str | None = None
     image: str | None = None
+
+
+class SummarizeRequest(BaseModel):
+    transcription_id: str | None = None
+    transcript: str | None = None
+    format_style: str = "detailed"
+    language: str = "en"
 
 
 @app.get("/")
@@ -80,6 +88,8 @@ async def upload_audio(
     file: UploadFile = File(...),
     language: str = Form("en-IN"),
     user_id: str | None = Form(None),
+    summarize: bool = Form(False),
+    format_style: str = Form("detailed"),
     db: Session = Depends(get_db),
 ):
     if not file.filename:
@@ -123,6 +133,17 @@ async def upload_audio(
     else:
         transcription_error = "GNANI_API_KEY is not configured in backend/.env"
 
+    summary_text = None
+    if summarize and transcription_result and transcription_result.get("transcript"):
+        try:
+            summary_text = await summarize_transcript(
+                transcript=transcription_result["transcript"],
+                format_style=format_style,
+                language=language,
+            )
+        except Exception:
+            pass
+
     transcription_id = None
     if db:
         try:
@@ -138,6 +159,7 @@ async def upload_audio(
                 method=transcription_result.get("method") if transcription_result else None,
                 job_id=transcription_result.get("job_id") if transcription_result else None,
                 full_transcript=transcription_result.get("transcript") if transcription_result else None,
+                summary=summary_text,
                 duration_seconds=transcription_result.get("duration_seconds") if transcription_result else None,
                 error_message=transcription_error,
             )
@@ -172,6 +194,7 @@ async def upload_audio(
             "key": key,
         },
         "transcript": transcription_result.get("transcript") if transcription_result else None,
+        "summary": summary_text,
         "segments": transcription_result.get("segments") if transcription_result else [],
         "language": transcription_result.get("language_code", language) if transcription_result else language,
         "method": transcription_result.get("method") if transcription_result else None,
@@ -248,12 +271,97 @@ def get_user_transcriptions(user_id: str, db: Session = Depends(get_db)):
                 "status": r.status,
                 "language": r.language,
                 "full_transcript": r.full_transcript,
+                "summary": r.summary,
                 "duration_seconds": r.duration_seconds,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in records
         ],
     }
+
+
+@app.get("/transcriptions/{transcription_id}")
+def get_transcription_detail(transcription_id: str, db: Session = Depends(get_db)):
+    if not db:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    record = (
+        db.query(Transcription)
+        .filter(Transcription.id == transcription_id)
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Transcription not found")
+    return {
+        "success": True,
+        "id": record.id,
+        "filename": record.filename,
+        "status": record.status,
+        "language": record.language,
+        "full_transcript": record.full_transcript,
+        "summary": record.summary,
+        "duration_seconds": record.duration_seconds,
+        "created_at": record.created_at.isoformat() if record.created_at else None,
+        "segments": [
+            {
+                "id": seg.id,
+                "segment_id": seg.segment_id,
+                "speaker_id": seg.speaker_id,
+                "start_time": seg.start_time,
+                "end_time": seg.end_time,
+                "text": seg.text,
+            }
+            for seg in record.segments
+        ],
+    }
+
+
+@app.post("/summarize")
+async def summarize(
+    payload: SummarizeRequest,
+    db: Session = Depends(get_db),
+):
+    text_to_summarize = payload.transcript
+    record = None
+
+    if payload.transcription_id and db:
+        record = (
+            db.query(Transcription)
+            .filter(Transcription.id == payload.transcription_id)
+            .first()
+        )
+        if not record:
+            raise HTTPException(status_code=404, detail="Transcription record not found")
+        if not text_to_summarize:
+            text_to_summarize = record.full_transcript
+
+    if not text_to_summarize or not text_to_summarize.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="No transcript text provided or found for summarization",
+        )
+
+    try:
+        summary_result = await summarize_transcript(
+            transcript=text_to_summarize,
+            format_style=payload.format_style,
+            language=payload.language,
+        )
+
+        if record and db:
+            record.summary = summary_result
+            db.commit()
+            db.refresh(record)
+
+        return {
+            "success": True,
+            "summary": summary_result,
+            "transcription_id": payload.transcription_id,
+            "format_style": payload.format_style,
+        }
+    except Exception as e:
+        if db and record:
+            db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/jobs/{job_id}")

@@ -18,3 +18,4 @@ GNANI_API_KEY = os.getenv("GNANI_API_KEY", "")
 GNANI_BASE_URL = os.getenv("GNANI_BASE_URL", "https://api.vachana.ai")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
