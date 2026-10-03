@@ -9,6 +9,8 @@ import { Toaster } from "@/components/ui/toast"
 const figtree = Figtree({subsets:['latin'],variable:'--font-sans'});
 
 
+import { AudioProvider } from "@/context/audio-context";
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -17,10 +19,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <AuthProvider>
-          <Navbar/>
-          {children}
-          <Footer/>
-          <Toaster/>
+          <AudioProvider>
+            <Navbar/>
+            {children}
+            <Footer/>
+            <Toaster/>
+          </AudioProvider>
         </AuthProvider>
       </body>
     </html>

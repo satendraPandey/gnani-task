@@ -1,37 +1,30 @@
-"use server";
-
-import { ALLOWED_EXTENSIONS } from "@/config";
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 export async function uploadAudio(formData: FormData) {
   try {
-    const file = formData.get("file") as File | null;
+    const res = await fetch(`${BACKEND_URL}/upload`, {
+      method: "POST",
+      body: formData,
+    });
 
-    if (!file || file.size === 0) {
-      return { success: false, error: "No file provided" };
-    }
-
-    const extension = file.name.split(".").pop()?.toLowerCase();
-    if (!extension || !ALLOWED_EXTENSIONS.includes(extension)) {
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => null);
       return {
         success: false,
-        error: "Unsupported file format. Please upload MP3, WAV, OGG, FLAC, AAC, or M4A.",
+        error: errorData?.detail || `Upload failed with status ${res.status}`,
       };
     }
 
-    return {
-      success: true,
-      message: "File uploaded successfully",
-      file: {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-      },
-    };
-
-} catch (err) {
+    const data = await res.json();
+    return data;
+  } catch (err) {
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Failed to process upload",
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to connect to backend server",
     };
   }
 }

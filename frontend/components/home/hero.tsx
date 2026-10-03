@@ -13,13 +13,15 @@ import { Mic, Upload } from "lucide-react";
 import { uploadAudio } from "@/app/actions/upload";
 import { toast } from "../ui/toast";
 import { ACCEPTED_FORMATS, ALLOWED_EXTENSIONS } from "@/config";
-
-
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useAudio } from "@/context/audio-context";
 
 const Hero = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const { file, setFile, isUploading, setIsUploading, language, setLanguage } = useAudio();
+  const { data: session } = useSession();
+  const router = useRouter();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -47,12 +49,22 @@ const Hero = () => {
       return;
     }
 
+    if (!session || !session?.user) {
+      toast.add({
+        title: "Please Login!",
+        type: "warning"
+      })
+      router.push("/login")
+      return;
+    }
+
     try {
       setIsUploading(true);
       const formData = new FormData();
       formData.append("file", file);
 
       const res = await uploadAudio(formData);
+      
       if (res.success) {
         toast.add({ title: res.message, type: "success" });
       } else {

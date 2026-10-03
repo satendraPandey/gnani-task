@@ -2,11 +2,21 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const publicRoutes = ["/", "/about", "/architecture", "/privacy-policy", "/terms"];
+const publicRoutes = [
+  "/",
+  "/about",
+  "/architecture",
+  "/privacy-policy",
+  "/terms",
+];
 const authRoutes = ["/login"];
-const protectedRoutes = ["/dashboard"];
+const protectedRoutes = ["/test"];
 
 export async function proxy(req: NextRequest) {
+  if (req.headers.has("next-action") || req.method !== "GET") {
+    return NextResponse.next();
+  }
+
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   const isAuthenticated = !!token;
   const { pathname } = req.nextUrl;
@@ -20,6 +30,9 @@ export async function proxy(req: NextRequest) {
   const isProtectedRoute = protectedRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
+
+  // If already authenticated and visiting an auth page (like /login),
+  // redirect to the 'next' destination if available, otherwise home
   if (isAuthRoute && isAuthenticated) {
     let nextDestination =
       req.nextUrl.searchParams.get("next") ||
@@ -31,6 +44,8 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL(nextDestination, req.url));
   }
 
+  // If not authenticated and visiting a protected route,
+  // redirect to /login preserving the requested path in 'next' and 'callbackUrl'
   if (isProtectedRoute && !isAuthenticated) {
     const loginUrl = new URL("/login", req.url);
     const target = `${pathname}${req.nextUrl.search}`;
