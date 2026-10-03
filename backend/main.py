@@ -51,6 +51,8 @@ class SummarizeRequest(BaseModel):
     transcript: str | None = None
     format_style: str = "detailed"
     language: str = "en"
+    user_id: str | None = None
+    filename: str | None = None
 
 
 @app.get("/")
@@ -275,15 +277,22 @@ async def transcribe_audio(
 
 
 @app.get("/transcriptions")
-def get_user_transcriptions(user_id: str, db: Session = Depends(get_db)):
+def get_user_transcriptions(user_id: str | None = None, db: Session = Depends(get_db)):
     if not db:
         return {"success": True, "transcriptions": []}
-    records = (
-        db.query(Transcription)
-        .filter(Transcription.user_id == user_id)
-        .order_by(Transcription.created_at.desc())
-        .all()
-    )
+    
+    query = db.query(Transcription)
+    if user_id and user_id != "all":
+        actual_id = user_id
+        if "@" in user_id:
+            u = db.query(User).filter(User.email == user_id).first()
+            if u:
+                actual_id = u.id
+        query = query.filter((Transcription.user_id == actual_id) | (Transcription.user_id == user_id))
+    elif not user_id:
+        return {"success": True, "transcriptions": []}
+
+    records = query.order_by(Transcription.created_at.desc()).all()
     return {
         "success": True,
         "transcriptions": [
@@ -362,10 +371,23 @@ async def summarize(
             .filter(Transcription.id == payload.transcription_id)
             .first()
         )
-    elif db and text_to_summarize and text_to_summarize.strip():
+    if not record and db and text_to_summarize and text_to_summarize.strip():
+        clean_text = text_to_summarize.strip()
         record = (
             db.query(Transcription)
-            .filter(Transcription.full_transcript == text_to_summarize)
+            .filter(Transcription.full_transcript == clean_text)
+            .order_by(Transcription.created_at.desc())
+            .first()
+        )
+    if not record and db and payload.user_id:
+        actual_user_id = payload.user_id
+        if "@" in actual_user_id:
+            u = db.query(User).filter(User.email == actual_user_id).first()
+            if u:
+                actual_user_id = u.id
+        record = (
+            db.query(Transcription)
+            .filter(Transcription.user_id == actual_user_id)
             .order_by(Transcription.created_at.desc())
             .first()
         )
@@ -403,7 +425,39 @@ async def summarize(
             language=payload.language,
         )
 
-        if record and db:
+        if not record and db:
+            actual_user_id = payload.user_id
+            if actual_user_id and "@" in actual_user_id:
+                u = db.query(User).filter(User.email == actual_user_id).first()
+                if u:
+                    actual_user_id = u.id
+
+            new_record_kwargs = {
+                "user_id": actual_user_id,
+                "filename": payload.filename or "Audio Transcript",
+                "file_key": f"summary_{uuid.uuid4().hex[:10]}",
+                "file_size": len(text_to_summarize.encode("utf-8")),
+                "file_type": "audio/mpeg",
+                "language": payload.language or "en-IN",
+                "status": "completed",
+                "full_transcript": text_to_summarize,
+                "summary": summary_result,
+                col_name: summary_result,
+            }
+            record = Transcription(**new_record_kwargs)
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+
+            sum_entry = Summary(
+                transcription_id=record.id,
+                format_style=format_style,
+                content=summary_result,
+                language=payload.language or "en",
+            )
+            db.add(sum_entry)
+            db.commit()
+        elif record and db:
             setattr(record, col_name, summary_result)
             record.summary = summary_result
 

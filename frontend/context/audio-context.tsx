@@ -24,6 +24,7 @@ export interface AudioContextType {
   language: string;
   isUploading: boolean;
   status: AudioStatus;
+  transcriptionId: string | null;
   transcript: string | null;
   summary: string | null;
   segments: AudioSegment[];
@@ -32,6 +33,7 @@ export interface AudioContextType {
   setLanguage: (lang: string) => void;
   setIsUploading: (loading: boolean) => void;
   setStatus: (status: AudioStatus) => void;
+  setTranscriptionId: (id: string | null) => void;
   setTranscript: (text: string | null) => void;
   setSummary: (summary: string | null) => void;
   setSegments: (segments: AudioSegment[]) => void;
@@ -47,6 +49,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguage] = useState<string>("en-IN");
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [status, setStatus] = useState<AudioStatus>("idle");
+  const [transcriptionId, setTranscriptionId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [segments, setSegments] = useState<AudioSegment[]>([]);
@@ -62,6 +65,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const url = URL.createObjectURL(file);
     setAudioUrl(url);
     setStatus("idle");
+    setTranscriptionId(null);
     setTranscript(null);
     setSummary(null);
     setSegments([]);
@@ -78,6 +82,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setAudioUrl(null);
     setIsUploading(false);
     setStatus("idle");
+    setTranscriptionId(null);
     setTranscript(null);
     setSummary(null);
     setSegments([]);
@@ -92,6 +97,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         language,
         isUploading,
         status,
+        transcriptionId,
         transcript,
         summary,
         segments,
@@ -100,6 +106,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         setLanguage,
         setIsUploading,
         setStatus,
+        setTranscriptionId,
         setTranscript,
         setSummary,
         setSegments,

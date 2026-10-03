@@ -36,7 +36,6 @@ const Hero = () => {
   const [generateSummary, setGenerateSummary] = useState(false);
   const [formatStyle, setFormatStyle] = useState<string>("brief");
   const [isReSummarizing, setIsReSummarizing] = useState<boolean>(false);
-  const [transcriptionId, setTranscriptionId] = useState<string | null>(null);
   const [summaryCache, setSummaryCache] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<"transcript" | "speakers" | "summary">("transcript");
   const {
@@ -48,6 +47,8 @@ const Hero = () => {
     setLanguage,
     status,
     setStatus,
+    transcriptionId,
+    setTranscriptionId,
     transcript,
     setTranscript,
     summary,
@@ -243,13 +244,19 @@ const Hero = () => {
 
     try {
       setIsReSummarizing(true);
+      const activeUserId = (session?.user as { id?: string })?.id || session?.user?.email || undefined;
       const res = await summarizeTranscriptAction({
         transcription_id: transcriptionId || undefined,
         transcript,
         format_style: newFormat,
         language,
+        user_id: activeUserId,
+        filename: file?.name || undefined,
       });
       if (res.success && res.summary) {
+        if (res.transcription_id) {
+          setTranscriptionId(res.transcription_id);
+        }
         setSummary(res.summary);
         setSummaryCache((prev) => ({
           ...prev,
@@ -287,13 +294,19 @@ const Hero = () => {
     if (!transcript) return;
     try {
       setIsReSummarizing(true);
+      const activeUserId = (session?.user as { id?: string })?.id || session?.user?.email || undefined;
       const res = await summarizeTranscriptAction({
         transcription_id: transcriptionId || undefined,
         transcript,
         format_style: formatStyle,
         language,
+        user_id: activeUserId,
+        filename: file?.name || undefined,
       });
       if (res.success && res.summary) {
+        if (res.transcription_id) {
+          setTranscriptionId(res.transcription_id);
+        }
         setSummary(res.summary);
         setSummaryCache((prev) => ({
           ...prev,

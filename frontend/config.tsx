@@ -63,7 +63,7 @@ export const navItems = [
 export const socialLinks = [
   {
     label: "Github",
-    href: "https://github.com/satendraPandey",
+    href: "https://github.com/satendraPandey/gnani-task",
     icon: GithubSvg,
   },
 ];
