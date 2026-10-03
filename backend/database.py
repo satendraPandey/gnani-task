@@ -43,6 +43,10 @@ def init_db():
         try:
             with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE transcriptions ADD COLUMN IF NOT EXISTS summary TEXT;"))
+                conn.execute(text("ALTER TABLE transcriptions ADD COLUMN IF NOT EXISTS summary_detailed TEXT;"))
+                conn.execute(text("ALTER TABLE transcriptions ADD COLUMN IF NOT EXISTS summary_brief TEXT;"))
+                conn.execute(text("ALTER TABLE transcriptions ADD COLUMN IF NOT EXISTS summary_bullets TEXT;"))
+                conn.execute(text("ALTER TABLE transcriptions ADD COLUMN IF NOT EXISTS summary_action_items TEXT;"))
                 conn.commit()
         except Exception:
             pass

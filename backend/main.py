@@ -10,10 +10,17 @@ from config import SITE_NAME, R2_BUCKET_NAME, GNANI_API_KEY
 from storage import upload_file_to_r2
 from gnani_service import smart_transcribe, get_batch_job_status
 from database import init_db, get_db
-from models import User, Transcription, Segment
+from models import User, Transcription, Segment, Summary
 from summarizer import summarize_transcript
 
 ALLOWED_EXTENSIONS = {"mp3", "wav", "ogg", "flac", "aac", "m4a"}
+
+SUMMARY_FORMAT_COLUMNS = {
+    "detailed": "summary_detailed",
+    "brief": "summary_brief",
+    "bullets": "summary_bullets",
+    "action_items": "summary_action_items",
+}
 
 
 @asynccontextmanager
@@ -148,25 +155,40 @@ async def upload_audio(
     if db:
         try:
             rec_status = "completed" if (transcription_result and transcription_result.get("transcript")) else ("failed" if transcription_error else "pending")
-            record = Transcription(
-                user_id=user_id,
-                filename=file.filename,
-                file_key=key,
-                file_size=file_size,
-                file_type=file.content_type or "audio/mpeg",
-                language=language,
-                status=rec_status,
-                method=transcription_result.get("method") if transcription_result else None,
-                job_id=transcription_result.get("job_id") if transcription_result else None,
-                full_transcript=transcription_result.get("transcript") if transcription_result else None,
-                summary=summary_text,
-                duration_seconds=transcription_result.get("duration_seconds") if transcription_result else None,
-                error_message=transcription_error,
-            )
+            fmt_col = SUMMARY_FORMAT_COLUMNS.get(format_style, "summary_brief")
+            record_kwargs = {
+                "user_id": user_id,
+                "filename": file.filename,
+                "file_key": key,
+                "file_size": file_size,
+                "file_type": file.content_type or "audio/mpeg",
+                "language": language,
+                "status": rec_status,
+                "method": transcription_result.get("method") if transcription_result else None,
+                "job_id": transcription_result.get("job_id") if transcription_result else None,
+                "full_transcript": transcription_result.get("transcript") if transcription_result else None,
+                "summary": summary_text,
+                "duration_seconds": transcription_result.get("duration_seconds") if transcription_result else None,
+                "error_message": transcription_error,
+            }
+            if summary_text:
+                record_kwargs[fmt_col] = summary_text
+
+            record = Transcription(**record_kwargs)
             db.add(record)
             db.commit()
             db.refresh(record)
             transcription_id = record.id
+
+            if summary_text:
+                sum_rec = Summary(
+                    transcription_id=record.id,
+                    format_style=format_style,
+                    content=summary_text,
+                    language=language,
+                )
+                db.add(sum_rec)
+                db.commit()
 
             if transcription_result and transcription_result.get("segments"):
                 for seg in transcription_result["segments"]:
@@ -272,6 +294,10 @@ def get_user_transcriptions(user_id: str, db: Session = Depends(get_db)):
                 "language": r.language,
                 "full_transcript": r.full_transcript,
                 "summary": r.summary,
+                "summary_detailed": r.summary_detailed,
+                "summary_brief": r.summary_brief,
+                "summary_bullets": r.summary_bullets,
+                "summary_action_items": r.summary_action_items,
                 "duration_seconds": r.duration_seconds,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
@@ -299,6 +325,10 @@ def get_transcription_detail(transcription_id: str, db: Session = Depends(get_db
         "language": record.language,
         "full_transcript": record.full_transcript,
         "summary": record.summary,
+        "summary_detailed": record.summary_detailed,
+        "summary_brief": record.summary_brief,
+        "summary_bullets": record.summary_bullets,
+        "summary_action_items": record.summary_action_items,
         "duration_seconds": record.duration_seconds,
         "created_at": record.created_at.isoformat() if record.created_at else None,
         "segments": [
@@ -320,6 +350,9 @@ async def summarize(
     payload: SummarizeRequest,
     db: Session = Depends(get_db),
 ):
+    format_style = payload.format_style or "brief"
+    col_name = SUMMARY_FORMAT_COLUMNS.get(format_style, "summary_brief")
+
     text_to_summarize = payload.transcript
     record = None
 
@@ -329,10 +362,33 @@ async def summarize(
             .filter(Transcription.id == payload.transcription_id)
             .first()
         )
-        if not record:
-            raise HTTPException(status_code=404, detail="Transcription record not found")
+    elif db and text_to_summarize and text_to_summarize.strip():
+        record = (
+            db.query(Transcription)
+            .filter(Transcription.full_transcript == text_to_summarize)
+            .order_by(Transcription.created_at.desc())
+            .first()
+        )
+
+    if record:
         if not text_to_summarize:
             text_to_summarize = record.full_transcript
+
+        existing_summary = getattr(record, col_name, None)
+        if existing_summary and existing_summary.strip():
+            return {
+                "success": True,
+                "summary": existing_summary,
+                "transcription_id": record.id,
+                "format_style": format_style,
+                "cached": True,
+                "summaries": {
+                    "detailed": record.summary_detailed,
+                    "brief": record.summary_brief,
+                    "bullets": record.summary_bullets,
+                    "action_items": record.summary_action_items,
+                },
+            }
 
     if not text_to_summarize or not text_to_summarize.strip():
         raise HTTPException(
@@ -343,20 +399,49 @@ async def summarize(
     try:
         summary_result = await summarize_transcript(
             transcript=text_to_summarize,
-            format_style=payload.format_style,
+            format_style=format_style,
             language=payload.language,
         )
 
         if record and db:
+            setattr(record, col_name, summary_result)
             record.summary = summary_result
+
+            sum_entry = (
+                db.query(Summary)
+                .filter(
+                    Summary.transcription_id == record.id,
+                    Summary.format_style == format_style,
+                )
+                .first()
+            )
+            if not sum_entry:
+                sum_entry = Summary(
+                    transcription_id=record.id,
+                    format_style=format_style,
+                    content=summary_result,
+                    language=payload.language or "en",
+                )
+                db.add(sum_entry)
+            else:
+                sum_entry.content = summary_result
+                sum_entry.language = payload.language or "en"
+
             db.commit()
             db.refresh(record)
 
         return {
             "success": True,
             "summary": summary_result,
-            "transcription_id": payload.transcription_id,
-            "format_style": payload.format_style,
+            "transcription_id": record.id if record else payload.transcription_id,
+            "format_style": format_style,
+            "cached": False,
+            "summaries": {
+                "detailed": getattr(record, "summary_detailed", None),
+                "brief": getattr(record, "summary_brief", None),
+                "bullets": getattr(record, "summary_bullets", None),
+                "action_items": getattr(record, "summary_action_items", None),
+            } if record else None,
         }
     except Exception as e:
         if db and record:

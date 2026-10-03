@@ -37,6 +37,7 @@ const Hero = () => {
   const [formatStyle, setFormatStyle] = useState<string>("brief");
   const [isReSummarizing, setIsReSummarizing] = useState<boolean>(false);
   const [transcriptionId, setTranscriptionId] = useState<string | null>(null);
+  const [summaryCache, setSummaryCache] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<"transcript" | "speakers" | "summary">("transcript");
   const {
     file,
@@ -232,6 +233,12 @@ const Hero = () => {
   const handleFormatStyleChange = async (newFormat: string | null) => {
     if (!newFormat) return;
     setFormatStyle(newFormat);
+
+    if (summaryCache[newFormat]) {
+      setSummary(summaryCache[newFormat]);
+      return;
+    }
+
     if (!transcript) return;
 
     try {
@@ -244,8 +251,13 @@ const Hero = () => {
       });
       if (res.success && res.summary) {
         setSummary(res.summary);
+        setSummaryCache((prev) => ({
+          ...prev,
+          ...(res.summaries || {}),
+          [newFormat]: res.summary,
+        }));
         toast.add({
-          title: "Summary updated",
+          title: res.cached ? "Summary loaded" : "Summary updated",
           type: "success",
         });
       } else {
@@ -266,6 +278,12 @@ const Hero = () => {
   };
 
   const handleGenerateSummary = async () => {
+    if (summaryCache[formatStyle]) {
+      setSummary(summaryCache[formatStyle]);
+      setActiveTab("summary");
+      return;
+    }
+
     if (!transcript) return;
     try {
       setIsReSummarizing(true);
@@ -277,9 +295,14 @@ const Hero = () => {
       });
       if (res.success && res.summary) {
         setSummary(res.summary);
+        setSummaryCache((prev) => ({
+          ...prev,
+          ...(res.summaries || {}),
+          [formatStyle]: res.summary,
+        }));
         setActiveTab("summary");
         toast.add({
-          title: "Summary generated",
+          title: res.cached ? "Summary loaded" : "Summary generated",
           type: "success",
         });
       } else {
@@ -323,6 +346,7 @@ const Hero = () => {
       setTranscript(null);
       setSummary(null);
       setTranscriptionId(null);
+      setSummaryCache({});
       setSegments([]);
       console.log("[Hero] Current state: uploading", {
         name: file.name,
@@ -372,6 +396,10 @@ const Hero = () => {
 
             if (summaryRes.success && summaryRes.summary) {
               setSummary(summaryRes.summary);
+              setSummaryCache({
+                ...(summaryRes.summaries || {}),
+                [formatStyle]: summaryRes.summary,
+              });
               setActiveTab("summary");
             } else {
               setSummary(null);

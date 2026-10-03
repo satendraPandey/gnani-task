@@ -56,6 +56,10 @@ class Transcription(Base):
     job_id = Column(String, nullable=True, index=True)
     full_transcript = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
+    summary_detailed = Column(Text, nullable=True)
+    summary_brief = Column(Text, nullable=True)
+    summary_bullets = Column(Text, nullable=True)
+    summary_action_items = Column(Text, nullable=True)
     duration_seconds = Column(Float, nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -71,6 +75,11 @@ class Transcription(Base):
         back_populates="transcription",
         cascade="all, delete-orphan",
         order_by="Segment.start_time",
+    )
+    summaries = relationship(
+        "Summary",
+        back_populates="transcription",
+        cascade="all, delete-orphan",
     )
 
 
@@ -92,3 +101,26 @@ class Segment(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     transcription = relationship("Transcription", back_populates="segments")
+
+
+class Summary(Base):
+    __tablename__ = "summaries"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    transcription_id = Column(
+        String,
+        ForeignKey("transcriptions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    format_style = Column(String, nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    language = Column(String, default="en", nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    transcription = relationship("Transcription", back_populates="summaries")
